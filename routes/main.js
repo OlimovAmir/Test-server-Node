@@ -3,80 +3,53 @@ const path = require('path');
 
 module.exports = function (app) {
     app.get('/', (req, res) => {
-        function isFolder(path) {
+
+        const base = './files/';
+        let dirPath = '';
+        function isFolder(base) { // проверка является ли папкой или файл
             try {
-                return fs.statSync(path).isDirectory();
+                return fs.statSync(base).isDirectory();
             } catch (err) {
                 return false;
             }
         }
 
-        const base = './files/';
-        let dirPath = '';
-
         if ('path' in req.query) {
-            dirPath = path.join(base, req.query.path);
+
+            dirPath = req.query.path;  //localhosl:8000?path=item1
         }
-
-        if (isFolder(base + dirPath)) {
+        function checkDirectoryContents(base, dirPath) {
             try {
-                const items = fs.readdirSync(base + dirPath);
-                const result = [];
+                const fullPath = path.join(base, dirPath);
+                const stats = fs.statSync(fullPath);
 
-                for (const item of items) {
-                    const itemPath = path.join(dirPath, item);
-                    const isDir = isFolder(itemPath);
-                    const itemInfo = {
-                        name: item,
-                        isDirectory: isDir,
-                    };
+                if (stats.isDirectory()) {
+                    console.log("Это папка");
+                    const contents = fs.readdirSync(fullPath); // Получаем список файлов и подкаталогов
+                    console.log("Содержимое папки:");
 
-                    if (isDir) {
-                        result.push(itemInfo);
-                    } else {
-                        const stats = fs.statSync(itemPath);
-                        itemInfo.size = stats.size;
-                        result.push(itemInfo);
-                    }
-                }
-
-                if (result.length === 0) {
-                    res.json({ error: 'Пустая папка' });
+                    const contentsInfo = contents.map(item => {
+                        const itemPath = path.join(fullPath, item);
+                        const itemStats = fs.statSync(itemPath);
+                        return {
+                            name: item,
+                            isDirectory: itemStats.isDirectory(),
+                            size: itemStats.isFile() ? itemStats.size : 'this is folder',
+                        };
+                    });
+                    console.log(contentsInfo);
+                    // Теперь можно отправить содержимое папки в ответ на запрос
+                    res.json(contentsInfo);
                 } else {
-                    res.json(result);
+                    throw new Error("Указанный путь не является папкой");
                 }
             } catch (err) {
-                res.json({ error: err.message });
-            }
-        } else {
-            // Если указанный путь не является папкой, попробуйте вывести файлы в этой папке
-            try {
-                const items = fs.readdirSync(path.dirname(base + dirPath));
-                const result = [];
-
-                for (const item of items) {
-                    const itemPath = path.join(path.dirname(dirPath), item);
-                    const isDir = isFolder(itemPath);
-                    const itemInfo = {
-                        name: item,
-                        isDirectory: isDir,
-                    };
-
-                    if (!isDir) {
-                        const stats = fs.statSync(itemPath);
-                        itemInfo.size = stats.size;
-                        result.push(itemInfo);
-                    }
-                }
-
-                if (result.length === 0) {
-                    res.json({ error: 'Указанный путь не является папкой, и в этой директории нет файлов' });
-                } else {
-                    res.json(result);
-                }
-            } catch (err) {
+                console.error(err.message);
                 res.json({ error: err.message });
             }
         }
+
+        // Пример использования функции
+        checkDirectoryContents(base, dirPath); // Замените на свои значения
     });
-};
+}
